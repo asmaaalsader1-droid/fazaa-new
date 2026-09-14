@@ -889,14 +889,10 @@
       const cardKeyValue = button.dataset.cardKey;
       try {
         cardDecisionOverrides.set(cardKeyValue, decision);
-        const docId = cardId || sessionId;
+        // cardId هو معرّف محاولة داخل history، أما وثيقة pays فتُحدّد بالجلسة/الطلب.
+        const docId = sessionId || cardId;
         // كتابة القرار في وثيقة pays مباشرة — المصدر الذي يقرأه موقع العملاء
-        await db.collection('pays').doc(docId).set({
-          decision: decision,
-          status: decision,
-          decidedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
         toast(decision === 'approved' ? 'تمت الموافقة على البطاقة' : 'تم رفض البطاقة', decision === 'approved' ? 'success' : 'error');
         renderReferenceDetail(visitor);
       } catch (error) {
@@ -1221,19 +1217,25 @@
   }
 
   // ── الموافقة / الرفض ────────────────────────────────────────
-  // نكتب القرار في وثيقة العميل customers/{sessionId} (المصدر الذي يقرأه الموقع)
+  // موقع الاختبار يراقب pays.cardStatus، مع إبقاء decision/status لتوافق اللوحة والسجلات السابقة.
+  function decisionPayload(decision) {
+    return {
+      decision: decision,
+      status: decision,
+      cardStatus: decision === 'approved' ? 'approved_with_otp' : 'rejected',
+      decidedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+  }
+
+  // نكتب القرار في وثيقة الطلب pays/{docId} (المصدر الذي يقرأه موقع الاختبار)
   async function setDecision(id, decision) {
     try {
       // ابحث عن الطلب عبر docId
       const n = allNotifications.find(x => x.id === id || x.sessionId === id);
       const docId = n ? n.id : id;
       if (!docId) { toast('تعذّر تحديد الطلب', 'error'); return; }
-      await db.collection('pays').doc(docId).set({
-        decision: decision,
-        status: decision,
-        decidedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+      await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
       toast(decision === 'approved' ? 'تمت الموافقة بنجاح' : 'تم الرفض', decision === 'approved' ? 'success' : 'error');
     } catch (err) {
       console.error('setDecision error:', err);
@@ -1255,13 +1257,9 @@
             : `<div class="mt-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-center"><span class="text-sm font-semibold text-red-400">✕ تم الرفض</span></div>`;
         }
       }
-      const docId = cardId || sessionId;
-      await db.collection('pays').doc(docId).set({
-        decision: decision,
-        status: decision,
-        decidedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+      // cardId يخص محاولة البطاقة داخل history؛ يجب تحديث وثيقة pays الخاصة بالعميل.
+      const docId = sessionId || cardId;
+      await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
       toast(decision === 'approved' ? 'تمت الموافقة بنجاح' : 'تم الرفض', decision === 'approved' ? 'success' : 'error');
     } catch (err) {
       console.error('setCardDecision error:', err);
