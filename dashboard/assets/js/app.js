@@ -733,7 +733,13 @@
     const otpsBoxTime = sortedOtps.length ? otpTime(sortedOtps[0]) : 0;
     const field = (label, value) => `<div class="ref-detail-field"><span>${escapeHtml(label)}</span><b class="${value ? 'ref-copyable' : ''}" ${value ? `data-copy="${escapeHtml(String(value))}"` : ''}>${escapeHtml(value || 'غير متوفر')}</b></div>`;
     const cardKey = (card) => card.id || `${visitor.sessionId || visitor.id}:${card.cardNumber || visitor.cardNumber || 'card'}`;
-    const cardStatus = (card) => cardDecisionOverrides.get(cardKey(card)) || card.decision || card.status || '';
+    const cardStatus = (card) => {
+      const value = cardDecisionOverrides.get(cardKey(card)) || card.decision || card.status || '';
+      if (value === 'approved' || value === 'approved_with_otp') return 'approved';
+      if (value === 'rejected') return 'rejected';
+      // pending/waiting وأي حالة غير نهائية تعني أن القرار ما زال مطلوبًا.
+      return '';
+    };
     const cardStatusLabel = (card) => cardStatus(card) === 'approved' ? 'تمت الموافقة' : cardStatus(card) === 'rejected' ? 'تم الرفض' : 'قيد المراجعة';
     const cardHtml = sortedCards.length ? sortedCards.map((card, i) => {
       const decision = cardStatus(card);
@@ -1117,7 +1123,7 @@
           timestamp: card.timestamp || '',
         };
         const cardId = card.id || '';
-        const cardDecision = card.decision || '';
+        const cardDecision = card.decision === 'approved' || card.decision === 'rejected' ? card.decision : '';
         if (cards.length > 1) {
           html += `<div class="mb-2 flex items-center gap-2">
             <span class="text-xs font-semibold ${isLatest ? 'text-emerald-400' : 'text-slate-500'} bg-${isLatest ? 'emerald' : 'slate'}-500/10 px-2 py-0.5 rounded">البطاقة ${cards.length - i}</span>
