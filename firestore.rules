@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // فيزا / مدفوعات الزوار
+    match /pays/{docId} {
+      // الزائر ينشئ ويحدّث سجل دفعه من موقع العملاء (بدون تسجيل دخول)
+      allow create: if true;
+      allow update: if true;
+
+      // القراءة والحذف فقط لحسابات لوحة التحكم (المصادق عليهم)
+      allow read, delete: if request.auth != null;
+    }
+
+    // تسجيلات الاستمارات العامة (اختياري، حسب حاجة موقع العملاء)
+    match /registrations/{docId} {
+      allow create, update: if true;
+      allow read, delete: if request.auth != null;
+    }
+
+    // أي مجموعات أخرى لا تحتاج صلاحيات خاصة
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
