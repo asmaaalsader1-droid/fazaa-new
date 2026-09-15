@@ -610,7 +610,7 @@
       // فلتر التبويب
       if (currentFilter === 'pending' && !(n.status === 'pending' || n.status === 'PENDING' || n.decision === 'pending' || (!n.decision && n.status !== 'approved' && n.status !== 'rejected'))) return false;
       if (currentFilter === 'card' && !n.cardNumber) return false;
-      if (currentFilter === 'online' && !n.isOnline === true) return false;
+      if (currentFilter === 'online' && n.isOnline !== true) return false;
       // البحث
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
