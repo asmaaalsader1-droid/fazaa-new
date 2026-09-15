@@ -682,7 +682,7 @@
     }
     els.referenceVisitorList.innerHTML = list.slice(0, 80).map(n => {
       const latestBoxTime = referenceActivityTime(n);
-      const recentActivity = n.isOnline === true;
+      const recentActivity = latestBoxTime > 0 && (Date.now() - latestBoxTime) < 35000;
       const title = n.name || n.phone || n.country || 'زائر جديد';
       const subtitle = routeLabel(n.currentStep || n.currentPage || n.redirectPage) || n.bank || 'في انتظار التفاعل';
       const checked = selectedReferenceIds.has(n.id);
@@ -695,7 +695,7 @@
     }).join('');
     updateReferenceBulkActions();
     if (referenceListCounterTimer) clearInterval(referenceListCounterTimer);
-    referenceListCounterTimer = setInterval(() => document.querySelectorAll('[data-client-counter]').forEach(node => { const timestamp = Number(node.dataset.clientTime); node.textContent = formatClientElapsed(timestamp); const dot = node.parentElement?.querySelector('i'); if (dot) { const recent = allNotifications.find((item) => item.id === node.closest('[data-ref-id]')?.dataset.refId)?.isOnline === true; dot.classList.toggle('online', recent); dot.classList.toggle('offline', !recent); } }), 1000);
+    referenceListCounterTimer = setInterval(() => document.querySelectorAll('[data-client-counter]').forEach(node => { const timestamp = Number(node.dataset.clientTime); node.textContent = formatClientElapsed(timestamp); const dot = node.parentElement?.querySelector('i'); if (dot) { const recent = timestamp > 0 && (Date.now() - timestamp) < 35000; dot.classList.toggle('online', recent); dot.classList.toggle('offline', !recent); } }), 1000);
   }
   function formatClientElapsed(timestamp) {
     const seconds = Math.max(0, Math.floor((Date.now() - (timestamp || Date.now())) / 1000));
