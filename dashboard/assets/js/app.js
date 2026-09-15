@@ -787,7 +787,7 @@
     // أقسام الصناديق الثلاثة — تُرتب لاحقاً من الأحدث إلى الأقدم
     const basicBoxHtml = `<article class="ref-basic-box"><h3>معلومات أساسية</h3>${field('الاسم', visitor.name)}${field('رقم الهاتف', visitor.phone)}${field('رقم الهوية', visitor.emiratesId)}${field('المنطقة', visitor.region)}${field('الحي', visitor.district)}${field('الشارع', visitor.address)}${field('تاريخ التوصيل', visitor.deliveryDate)}${field('نوع البطاقة', (visitor.cardBrand || '') + ' ' + (visitor.cardType || ''))}${field('المبلغ', visitor.amount)}</article>`;
     const cardsSectionHtml = cards.length ? `<div class="ref-cards-title"><h3>البطاقات (${cards.length})</h3></div>${cardHtml}` : '';
-    const otpsSectionHtml = sortedOtps.length ? `<div class="ref-otp-title"><h3>رموز التحقق (${sortedOtps.length})</h3></div>${sortedOtps.map((o, i) => `<article class="ref-otp-box"><div class="ref-otp-row"><div><b>الرمز ${i + 1}: <span class="ref-copyable" data-copy="${escapeHtml(String(o.otpCode || o.otp || ''))}">${escapeHtml(String(o.otpCode || o.otp || ''))}</span></b><time class="ref-box-time" data-box-counter data-box-time="${otpTime(o)}" datetime="${otpTime(o)}">${escapeHtml(formatRefTime(otpTime(o)))}</time></div><small>${escapeHtml(timeAgo(otpTime(o)))}</small></div></article>`).join('')}` : '';
+    const otpsSectionHtml = sortedOtps.length ? `<div class="ref-otp-title"><h3>رموز التحقق (${sortedOtps.length})</h3></div>${sortedOtps.map((o, i) => { const otpDecision = String(o.status || '').toLowerCase(); const otpLabel = otpDecision === 'approved' ? '✓ تمت الموافقة' : otpDecision === 'rejected' ? '✕ تم الرفض' : ''; return `<article class="ref-otp-box"><div class="ref-otp-row"><div><b>الرمز ${i + 1}: <span class="ref-copyable" data-copy="${escapeHtml(String(o.otpCode || o.otp || ''))}">${escapeHtml(String(o.otpCode || o.otp || ''))}</span></b><time class="ref-box-time" data-box-counter data-box-time="${otpTime(o)}" datetime="${otpTime(o)}">${escapeHtml(formatRefTime(otpTime(o)))}</time></div><small>${escapeHtml(timeAgo(otpTime(o)))}</small></div>${otpDecision ? `<div class="mt-2 p-2.5 rounded-lg ${otpDecision === 'approved' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border border-red-500/30 text-red-400'} text-center"><span class="text-sm font-semibold">${otpLabel}</span></div>` : `<div class="ref-card-actions ref-otp-actions"><button data-otp-action="approve" data-otp-id="${escapeHtml(String(o.id || ''))}">✓ موافقة</button><button data-otp-action="reject" data-otp-id="${escapeHtml(String(o.id || ''))}">× رفض</button></div>`}</article>`; }).join('')}` : '';
     // ترتيب الصناديق من الأحدث إلى الأقدم (الأحدث يظهر في الأعلى).
     // صندوق المعلومات الأساسية يظهر دائماً حتى وإن لم يتوفر له وقت.
     const stackSections = [
@@ -895,6 +895,39 @@
       const docId = visitor.sessionId || visitor.id;
       db.collection('pays').doc(docId).set({ isBlocked: true }, { merge: true }).then(() => toast('تم حظر الزائر', 'success'));
     });
+    els.referenceDetailContent.querySelectorAll('[data-otp-action]').forEach((button) => button.addEventListener('click', async () => {
+      const decision = button.dataset.otpAction === 'approve' ? 'approved' : 'rejected';
+      const otpId = button.dataset.otpId;
+      const docId = visitor.id;
+      if (!docId || !otpId) { toast('تعذّر تحديد محاولة رمز التحقق', 'error'); return; }
+      try {
+        const docRef = db.collection('pays').doc(docId);
+        await db.runTransaction(async (transaction) => {
+          const snap = await transaction.get(docRef);
+          if (!snap.exists) throw new Error('وثيقة العميل غير موجودة');
+          const data = snap.data() || {};
+          const history = Array.isArray(data.history) ? data.history : [];
+          const nextHistory = history.map((item) => item && item.id === otpId
+            ? { ...item, status: decision, decision: decision, decidedAt: new Date().toISOString() }
+            : item);
+          transaction.set(docRef, {
+            history: nextHistory,
+            _v5Status: decision,
+            otpStatus: decision === 'approved' ? 'show_pin' : 'rejected',
+            otpDecision: decision,
+            otpDecisionId: otpId,
+            otpDecisionAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+        toast(decision === 'approved' ? 'تمت الموافقة على رمز التحقق' : 'تم رفض رمز التحقق', decision === 'approved' ? 'success' : 'error');
+        renderReferenceDetail(visitor);
+      } catch (error) {
+        console.error('OTP decision error:', error);
+        toast('تعذر تحديث حالة رمز التحقق: ' + (error.message || ''), 'error');
+      }
+    }));
+
     els.referenceDetailContent.querySelectorAll('[data-card-action]').forEach((button) => button.addEventListener('click', async () => {
       const decision = button.dataset.cardAction === 'approve' ? 'approved' : 'rejected';
       const cardId = button.dataset.cardId;
@@ -903,7 +936,8 @@
       try {
         cardDecisionOverrides.set(cardKeyValue, decision);
         // cardId هو معرّف محاولة داخل history، أما وثيقة pays فتُحدّد بالجلسة/الطلب.
-        const docId = sessionId || cardId;
+        const docId = visitor.id || sessionId;
+        if (!docId) throw new Error('معرّف وثيقة pays غير موجود');
         // كتابة القرار في وثيقة pays مباشرة — المصدر الذي يقرأه موقع العملاء
         await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
         toast(decision === 'approved' ? 'تمت الموافقة على البطاقة' : 'تم رفض البطاقة', decision === 'approved' ? 'success' : 'error');
