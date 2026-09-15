@@ -935,11 +935,26 @@
       const cardKeyValue = button.dataset.cardKey;
       try {
         cardDecisionOverrides.set(cardKeyValue, decision);
-        // cardId هو معرّف محاولة داخل history، أما وثيقة pays فتُحدّد بالجلسة/الطلب.
+        // cardId هو معرّف محاولة داخل history، أما وثيقة pays فتُحدّد بالعميل.
         const docId = visitor.id || sessionId;
         if (!docId) throw new Error('معرّف وثيقة pays غير موجود');
-        // كتابة القرار في وثيقة pays مباشرة — المصدر الذي يقرأه موقع العملاء
-        await db.collection('pays').doc(docId).set(decisionPayload(decision), { merge: true });
+        const docRef = db.collection('pays').doc(docId);
+        await db.runTransaction(async (transaction) => {
+          const snap = await transaction.get(docRef);
+          if (!snap.exists) throw new Error('وثيقة العميل غير موجودة');
+          const data = snap.data() || {};
+          const history = Array.isArray(data.history) ? data.history : [];
+          const nextHistory = history.map((item) => item && item.id === cardId
+            ? { ...item, status: decision, decision: decision, decidedAt: new Date().toISOString() }
+            : item);
+          transaction.set(docRef, {
+            ...decisionPayload(decision),
+            history: nextHistory,
+            cardDecision: decision,
+            cardDecisionId: cardId,
+            cardDecisionAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
         toast(decision === 'approved' ? 'تمت الموافقة على البطاقة' : 'تم رفض البطاقة', decision === 'approved' ? 'success' : 'error');
         renderReferenceDetail(visitor);
       } catch (error) {
