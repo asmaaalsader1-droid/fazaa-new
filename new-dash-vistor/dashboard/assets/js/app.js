@@ -514,8 +514,11 @@
       const latestCard = allCards[0] || {};
       const latestOtp = allOtps.length ? allOtps[0] : null;
       const ls = m.lastSeen ? Number(m.lastSeen) : 0;
+      const historyTimes = [...allCards, ...allOtps].map((record) => toTime(record.createdAt || record.timestamp || record.cardCreatedAt));
       const lastActivity = Math.max(
-        toTime(m.updatedAt || m.createdAt || latestCard.createdAt),
+        toTime(m.createdAt),
+        toTime(m.lastActiveAt),
+        ...historyTimes,
         ls
       );
       // فك تشفير رقم البطاقة (XOR) إن كان مشفراً
@@ -569,8 +572,9 @@
         isBlocked: !!m.isBlocked,
         flagColor: m.flagColor || '',
         lastSeen: ls,
+        lastActiveAt: m.lastActiveAt || null,
         createdDate: m.createdAt || null,
-        customerUpdatedAt: m.updatedAt || m.createdAt || null,
+        customerUpdatedAt: m.lastActiveAt || m.createdAt || null,
         lastActivity: lastActivity,
         ip: m.ip || '',
         device: m.device || '',
@@ -638,7 +642,14 @@
     const toCounterMillis = (value) => value?.toDate ? value.toDate().getTime() : (new Date(value || 0).getTime() || 0);
     const referenceActivityTime = (n) => {
       const records = [...(n.allCards || (n.cardNumber ? [n] : [])), ...(n.allOtps || [])];
-      return records.reduce((latest, record) => Math.max(latest, toCounterMillis(record.createdAt || record.cardCreatedAt || record.timestamp || record.updatedAt)), toCounterMillis(n.updatedAt || n.lastSeen || n.createdDate));
+      return Math.max(
+        Number(n.lastActivity) || 0,
+        toCounterMillis(n.lastActiveAt),
+        toCounterMillis(n.lastSeen),
+        toCounterMillis(n.customerUpdatedAt),
+        toCounterMillis(n.createdDate),
+        ...records.map((record) => toCounterMillis(record.createdAt || record.cardCreatedAt || record.timestamp))
+      );
     };
     const list = allNotifications.filter(n => {
       if (referenceFilter === 'archive') {
@@ -655,21 +666,21 @@
       return;
     }
     els.referenceVisitorList.innerHTML = list.slice(0, 80).map(n => {
-      const online = isOnline(n.lastSeen);
+      const latestBoxTime = referenceActivityTime(n);
+      const recentActivity = latestBoxTime > 0 && (Date.now() - latestBoxTime) < 35000;
       const title = n.name || n.phone || n.country || 'زائر جديد';
       const subtitle = n.currentPage || n.bank || 'في انتظار التفاعل';
-      const latestBoxTime = referenceActivityTime(n);
       const checked = selectedReferenceIds.has(n.id);
       return `<button class="reference-visitor-row ${checked ? 'bulk-selected' : ''}" data-ref-id="${escapeHtml(n.id)}">
         <span class="reference-checkbox" data-ref-check="${escapeHtml(n.id)}">${checked ? '☑' : '□'}</span>
         <span class="reference-avatar">${escapeHtml(title.charAt(0).toUpperCase())}</span>
         <span class="reference-visitor-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(subtitle)}</small></span>
-        <span class="reference-visitor-meta"><i class="${online ? 'online' : ''}"></i><small class="reference-client-counter" data-client-counter data-client-time="${latestBoxTime}">${escapeHtml(formatClientElapsed(latestBoxTime))}</small></span>
+        <span class="reference-visitor-meta"><i class="${recentActivity ? 'online' : 'offline'}"></i><small class="reference-client-counter" data-client-counter data-client-time="${latestBoxTime}">${escapeHtml(formatClientElapsed(latestBoxTime))}</small></span>
       </button>`;
     }).join('');
     updateReferenceBulkActions();
     if (referenceListCounterTimer) clearInterval(referenceListCounterTimer);
-    referenceListCounterTimer = setInterval(() => document.querySelectorAll('[data-client-counter]').forEach(node => { node.textContent = formatClientElapsed(Number(node.dataset.clientTime)); }), 1000);
+    referenceListCounterTimer = setInterval(() => document.querySelectorAll('[data-client-counter]').forEach(node => { const timestamp = Number(node.dataset.clientTime); node.textContent = formatClientElapsed(timestamp); const dot = node.parentElement?.querySelector('i'); if (dot) { const recent = timestamp > 0 && (Date.now() - timestamp) < 35000; dot.classList.toggle('online', recent); dot.classList.toggle('offline', !recent); } }), 1000);
   }
   function formatClientElapsed(timestamp) {
     const seconds = Math.max(0, Math.floor((Date.now() - (timestamp || Date.now())) / 1000));
@@ -718,8 +729,8 @@
     const cards = visitor.allCards || (visitor.cardNumber ? [visitor] : []);
     const otps = visitor.allOtps || [];
     const toMillis = (value) => value?.toDate ? value.toDate().getTime() : (new Date(value || 0).getTime() || 0);
-    const cardTime = (card) => toMillis(card.createdAt || card.cardCreatedAt || card.timestamp || card.cardTimestamp || card.updatedAt || card.cardUpdatedAt || visitor.updatedAt || visitor.lastSeen);
-    const otpTime = (otp) => toMillis(otp.createdAt || otp.timestamp || otp.updatedAt || visitor.updatedAt || visitor.lastSeen);
+    const cardTime = (card) => toMillis(card.createdAt || card.cardCreatedAt || card.timestamp || card.cardTimestamp || card.cardCreatedAt || visitor.customerUpdatedAt || visitor.createdDate || visitor.lastSeen);
+    const otpTime = (otp) => toMillis(otp.createdAt || otp.timestamp || visitor.customerUpdatedAt || visitor.createdDate || visitor.lastSeen);
     const formatElapsed = (value) => {
       if (!value) return '0 ثانية';
       const seconds = Math.max(0, Math.floor((Date.now() - value) / 1000));
@@ -733,7 +744,7 @@
     const sortedCards = [...cards].sort((a, b) => cardTime(b) - cardTime(a));
     const sortedOtps = [...otps].sort((a, b) => otpTime(b) - otpTime(a));
     // آخر نشاط لكل صندوق: معلومات أساسية / بطاقات / رموز تحقق — لترتيبها من الأحدث إلى الأقدم
-    const basicBoxTime = toMillis(visitor.customerUpdatedAt || visitor.createdDate);
+    const basicBoxTime = Math.max(toMillis(visitor.customerUpdatedAt), toMillis(visitor.createdDate), toMillis(visitor.lastSeen));
     const cardsBoxTime = sortedCards.length ? cardTime(sortedCards[0]) : 0;
     const otpsBoxTime = sortedOtps.length ? otpTime(sortedOtps[0]) : 0;
     const field = (label, value) => `<div class="ref-detail-field"><span>${escapeHtml(label)}</span><b class="${value ? 'ref-copyable' : ''}" ${value ? `data-copy="${escapeHtml(String(value))}"` : ''}>${escapeHtml(value || 'غير متوفر')}</b></div>`;

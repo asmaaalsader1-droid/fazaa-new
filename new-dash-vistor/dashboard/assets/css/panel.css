@@ -209,6 +209,7 @@ body { direction: rtl; }
 .reference-visitor-meta { display:flex; flex:none; align-items:flex-end; flex-direction:column; gap:4px; color:#9ca3af; }
 .reference-visitor-meta i { width:6px; height:6px; border-radius:50%; background:#d1d5db; }
 .reference-visitor-meta i.online { background:#22c55e; box-shadow:0 0 0 3px #dcfce7; }
+.reference-visitor-meta i.offline { background:#111827; box-shadow:none; opacity:.65; }
 .reference-visitor-meta small { font-size:9px; color:#9ca3af; }
 .reference-empty { padding:40px 12px; color:#9ca3af; text-align:center; font-size:11px; }
 
