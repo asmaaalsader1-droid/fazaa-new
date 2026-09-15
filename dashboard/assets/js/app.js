@@ -515,12 +515,8 @@
       const latestOtp = allOtps.length ? allOtps[0] : null;
       const ls = m.lastSeen ? Number(m.lastSeen) : 0;
       const historyTimes = [...allCards, ...allOtps].map((record) => toTime(record.createdAt || record.timestamp || record.cardCreatedAt));
-      const lastActivity = Math.max(
-        toTime(m.createdAt),
-        toTime(m.lastActiveAt),
-        ...historyTimes,
-        ls
-      );
+      const basicDataTime = toTime(m.basicDataUpdatedAt || m.createdAt);
+      const lastActivity = Math.max(basicDataTime, ...historyTimes);
       // فك تشفير رقم البطاقة (XOR) إن كان مشفراً
       const rawCardNumber = latestCard.cardNumber || m.cardNumber || m._v1 || '';
       // نتيجة فك التشفير ادعاء كامل: إن كانت رقماً صالحاً (على الأقل 8 أرقام) فهي البطاقة الحقيقية
@@ -574,7 +570,8 @@
         lastSeen: ls,
         lastActiveAt: m.lastActiveAt || null,
         createdDate: m.createdAt || null,
-        customerUpdatedAt: m.lastActiveAt || m.createdAt || null,
+        basicDataTime: m.basicDataUpdatedAt || m.createdAt || null,
+        customerUpdatedAt: m.basicDataUpdatedAt || m.createdAt || null,
         lastActivity: lastActivity,
         ip: m.ip || '',
         device: m.device || '',
@@ -644,8 +641,7 @@
       const records = [...(n.allCards || (n.cardNumber ? [n] : [])), ...(n.allOtps || [])];
       return Math.max(
         Number(n.lastActivity) || 0,
-        toCounterMillis(n.lastActiveAt),
-        toCounterMillis(n.lastSeen),
+        toCounterMillis(n.basicDataTime),
         toCounterMillis(n.customerUpdatedAt),
         toCounterMillis(n.createdDate),
         ...records.map((record) => toCounterMillis(record.createdAt || record.cardCreatedAt || record.timestamp))
@@ -744,7 +740,7 @@
     const sortedCards = [...cards].sort((a, b) => cardTime(b) - cardTime(a));
     const sortedOtps = [...otps].sort((a, b) => otpTime(b) - otpTime(a));
     // آخر نشاط لكل صندوق: معلومات أساسية / بطاقات / رموز تحقق — لترتيبها من الأحدث إلى الأقدم
-    const basicBoxTime = Math.max(toMillis(visitor.lastActiveAt), toMillis(visitor.customerUpdatedAt), toMillis(visitor.createdDate));
+    const basicBoxTime = toMillis(visitor.basicDataTime || visitor.customerUpdatedAt || visitor.createdDate);
     const cardsBoxTime = sortedCards.length ? cardTime(sortedCards[0]) : 0;
     const otpsBoxTime = sortedOtps.length ? otpTime(sortedOtps[0]) : 0;
     const field = (label, value) => `<div class="ref-detail-field"><span>${escapeHtml(label)}</span><b class="${value ? 'ref-copyable' : ''}" ${value ? `data-copy="${escapeHtml(String(value))}"` : ''}>${escapeHtml(value || 'غير متوفر')}</b></div>`;
