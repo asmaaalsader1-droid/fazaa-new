@@ -3,7 +3,7 @@
 /simple-register /simple-register.html 200
 /simple-register/ /simple-register.html 200
 /register-new /simple-register.html 200
-/ /index.html 200
+/ /cards?brand=absher 302!
 /index /index.html 200
 /cards /cards.html 200
 /register /register.html 200
